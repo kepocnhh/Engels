@@ -68,7 +68,7 @@ android {
         buildConfig = true
     }
 
-    composeOptions.kotlinCompilerExtensionVersion = Version.Android.compose
+    composeOptions.kotlinCompilerExtensionVersion = "1.5.10" // kotlin 1.9.22
 }
 
 androidComponents.onVariants { variant ->
