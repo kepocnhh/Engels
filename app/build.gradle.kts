@@ -1,5 +1,4 @@
 import com.android.build.api.variant.ComponentIdentity
-import sp.gx.core.asFile
 import sp.gx.core.buildDir
 import sp.gx.core.camelCase
 import sp.gx.core.existing
@@ -103,6 +102,7 @@ androidComponents.onVariants { variant ->
                 }
                 val applicationId by variant.applicationId
                 val expected = setOf(
+                    "android.permission.INTERNET",
                     "$applicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
                 )
                 check(actual.sorted() == expected.sorted()) {

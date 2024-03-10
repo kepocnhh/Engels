@@ -3,6 +3,7 @@ package org.kepocnhh.engels
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.ui.platform.ComposeView
+import org.kepocnhh.engels.module.router.RouterScreen
 import org.kepocnhh.engels.util.compose.BackHandler
 
 internal class MainActivity : AppCompatActivity() {
@@ -17,7 +18,7 @@ internal class MainActivity : AppCompatActivity() {
                 BackHandler {
                     finish()
                 }
-                // todo
+                RouterScreen()
             }
         }
     }
