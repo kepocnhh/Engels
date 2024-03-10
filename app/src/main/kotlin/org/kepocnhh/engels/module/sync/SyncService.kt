@@ -13,13 +13,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.skip
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.lang.StringBuilder
-import java.net.InetAddress
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
@@ -28,11 +27,7 @@ internal class SyncService : Service() {
     sealed interface State {
         data object Stopped : State
         data object Stopping : State
-        class Started(val address: InetAddress) : State {
-            override fun toString(): String {
-                return "Started($address)"
-            }
-        }
+        data class Started(val address: String) : State
         data object Starting : State
     }
 
@@ -106,10 +101,19 @@ internal class SyncService : Service() {
         Log.d(TAG, "on starting...")
         if (state.value != State.Starting) error("connect state: $state")
         val serverSocket = checkNotNull(serverSocket)
-        Log.d(TAG, "on starting: " + serverSocket.localSocketAddress + ":" + serverSocket.localPort)
         scope.launch {
-            _state.value = State.Started(serverSocket.inetAddress)
             withContext(Dispatchers.IO) {
+                val address = NetworkInterface
+                    .getNetworkInterfaces()
+                    .asSequence()
+                    .flatMap { it.inetAddresses.asSequence() }
+                    .filter { !it.isLoopbackAddress }
+                    .filterIsInstance<Inet4Address>()
+                    .single()
+                    .hostAddress
+                    ?: error("No address!")
+                Log.d(TAG, "on starting:$address:${serverSocket.localPort}")
+                _state.value = State.Started("$address:${serverSocket.localPort}")
                 onStarted(serverSocket)
             }
         }

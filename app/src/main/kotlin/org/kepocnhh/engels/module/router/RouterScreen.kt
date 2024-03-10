@@ -68,7 +68,7 @@ internal fun RouterScreen() {
                             .fillMaxWidth()
                             .height(64.dp)
                             .wrapContentSize(),
-                        text = syncState.address.hostAddress.toString(),
+                        text = syncState.address,
                     )
                     BasicText(
                         modifier = Modifier
