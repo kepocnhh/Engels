@@ -1,5 +1,10 @@
 import com.android.build.api.variant.ComponentIdentity
+import sp.gx.core.asFile
+import sp.gx.core.buildDir
 import sp.gx.core.camelCase
+import sp.gx.core.existing
+import sp.gx.core.file
+import sp.gx.core.filled
 import sp.gx.core.kebabCase
 
 repositories {
@@ -78,10 +83,17 @@ androidComponents.onVariants { variant ->
             kotlinOptions.jvmTarget = Version.jvmTarget
         }
         val checkManifestTask = task(camelCase("checkManifest", variant.name)) {
-            dependsOn(camelCase("compile", variant.name, "Sources"))
+            dependsOn(camelCase("process", variant.name, "Manifest"))
             doLast {
-                val file = "intermediates/merged_manifest/${variant.name}/AndroidManifest.xml"
-                val manifest = groovy.xml.XmlParser().parse(layout.buildDirectory.file(file).get().asFile)
+                val file = buildDir()
+                    .dir("intermediates/merged_manifests")
+                    .dir(variant.name)
+                    .dir(camelCase("process", variant.name, "Manifest"))
+                    .file("AndroidManifest.xml")
+                    .existing()
+                    .file()
+                    .filled()
+                val manifest = groovy.xml.XmlParser().parse(file)
                 val actual = manifest.getAt(groovy.namespace.QName("uses-permission")).map {
                     check(it is groovy.util.Node)
                     val attributes = it.attributes().mapKeys { (k, _) -> k.toString() }
