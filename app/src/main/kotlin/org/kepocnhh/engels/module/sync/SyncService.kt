@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.kepocnhh.engels.module.sync.SyncService.Companion.notify
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -101,9 +102,9 @@ internal class SyncService : Service() {
     private fun onSocketAccept(socket: Socket) {
         Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
         val request = socket.getInputStream().toHttpRequest()
-        Log.d(TAG, "request:\n\t---\n${request.headers.toList().joinToString(separator = "\n")}\n\t---")
+        Log.d(TAG, "request:${request.method}:${request.query}\n\t---\n${request.headers.toList().joinToString(separator = "\n")}\n\t---")
         if (request.body != null) {
-            Log.d(TAG, "request:body:\n\t---\n${String(request.body)}\n\t---")
+            Log.d(TAG, "request:body:${request.body.size}\n\t---\n${String(request.body)}\n\t---")
         }
         val response = StringBuilder()
             .append("HTTP/1.1 200 Success")
@@ -190,9 +191,8 @@ internal class SyncService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             }
             Action.StartForeground -> {
-                val notificationId: Int = intent.getIntExtra("notificationId", -1)
                 val notification: Notification = intent.getParcelableExtra("notification") ?: TODO()
-                startForeground(notificationId, notification)
+                startForeground(NOTIFICATION_ID, notification)
             }
         }
     }
