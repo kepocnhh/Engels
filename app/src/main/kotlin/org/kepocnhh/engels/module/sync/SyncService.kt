@@ -66,10 +66,12 @@ internal class SyncService : Service() {
         check(!firstHeader.isNullOrBlank())
         val split = firstHeader.split(" ")
         check(split.size == 3)
+        val protocol = split[2].split("/")
+        check(protocol.size == 2)
+        check(protocol[0] == "HTTP")
+        val version = protocol[1]
         val method = split[0]
         val query = split[1]
-        val httpVersion = split[2]
-        val version = httpVersion.split("/")[1]
         val headers = mutableMapOf<String, String>()
         while (true) {
             val line = reader.readLine()
