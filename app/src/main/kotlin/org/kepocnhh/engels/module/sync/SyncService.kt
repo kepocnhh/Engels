@@ -1,11 +1,16 @@
 package org.kepocnhh.engels.module.sync
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +31,7 @@ import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
+import kotlin.math.absoluteValue
 
 internal class SyncService : Service() {
     sealed interface Broadcast {
@@ -40,6 +46,8 @@ internal class SyncService : Service() {
     }
 
     enum class Action {
+        StartForeground,
+        StopForeground,
         StartServer,
         StopServer,
     }
@@ -157,6 +165,11 @@ internal class SyncService : Service() {
         when (action) {
             Action.StartServer -> onStartServer()
             Action.StopServer -> onStopServer()
+            Action.StopForeground -> {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            }
+            Action.StartForeground -> {
+            }
         }
     }
 
@@ -250,7 +263,7 @@ internal class SyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "on create[${hashCode()}]...") // todo
-        state.onEach(::onState).launchIn(scope)
+        state.drop(1).onEach(::onState).launchIn(scope)
     }
 
     override fun onDestroy() {
@@ -261,6 +274,9 @@ internal class SyncService : Service() {
 
     companion object {
         private const val TAG = "[Sync]"
+        private val CHANNEL_ID = "${SyncService::class.java.name}:CHANNEL"
+        private const val CHANNEL_NAME = "Sync service"
+        private val NOTIFICATION_ID = System.currentTimeMillis().toInt().absoluteValue
 
         private val _broadcast = MutableSharedFlow<Broadcast>()
         val broadcast = _broadcast.asSharedFlow()
@@ -295,6 +311,43 @@ internal class SyncService : Service() {
 
         fun stopServer(context: Context) {
             val intent = intent(context, Action.StopServer)
+            context.startService(intent)
+        }
+
+        private fun notify(context: Context, notification: Notification) {
+            val notificationManager = context.getSystemService(NotificationManager::class.java)
+            notificationManager.checkChannel()
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        }
+
+        private fun NotificationManager.checkChannel() {
+            val channel: NotificationChannel? = getNotificationChannel(CHANNEL_ID)
+            if (channel == null) {
+                createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        CHANNEL_NAME,
+                        NotificationManager.IMPORTANCE_HIGH,
+                    ),
+                )
+            }
+        }
+
+        private fun Context.buildNotification(title: String): Notification {
+            return NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle(title)
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .build()
+        }
+
+        fun startForeground(context: Context, title: String) {
+            val intent = intent(context, Action.StartForeground)
+            intent.putExtra("notification", context.buildNotification(title = title))
+            context.startService(intent)
+        }
+
+        fun stopForeground(context: Context) {
+            val intent = intent(context, Action.StopForeground)
             context.startService(intent)
         }
     }

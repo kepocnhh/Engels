@@ -8,6 +8,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.coroutineScope
+import androidx.lifecycle.flowWithLifecycle
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import org.kepocnhh.engels.module.sync.SyncService
 import org.kepocnhh.engels.util.compose.LocalOnBackPressedDispatcher
 import org.kepocnhh.engels.util.compose.toPaddings
 
@@ -34,8 +41,30 @@ internal class App : Application() {
         }
     }
 
+    private fun onState(state: SyncService.State) {
+        when (state) {
+            is SyncService.State.Started -> {
+                // todo
+            }
+            SyncService.State.Starting -> {
+                // todo
+            }
+            SyncService.State.Stopped -> {
+                SyncService.stopForeground(this)
+            }
+            SyncService.State.Stopping -> {
+                // todo
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
+        SyncService.state
+            .flowWithLifecycle(lifecycle, minActiveState = Lifecycle.State.CREATED)
+            .onEach(::onState)
+            .launchIn(lifecycle.coroutineScope)
         // todo
     }
 }
