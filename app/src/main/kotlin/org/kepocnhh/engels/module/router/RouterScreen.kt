@@ -36,6 +36,9 @@ internal fun RouterScreen() {
                 is SyncService.Broadcast.OnError -> {
                     context.showToast("Error: ${it.e}")
                 }
+                is SyncService.Broadcast.OnState -> {
+                    // todo
+                }
             }
         }
     }

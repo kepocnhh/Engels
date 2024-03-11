@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -38,6 +39,7 @@ import kotlin.math.absoluteValue
 internal class SyncService : Service() {
     sealed interface Broadcast {
         data class OnError(val e: Throwable) : Broadcast
+        data class OnState(val state: State) : Broadcast
     }
 
     sealed interface State {
@@ -57,6 +59,7 @@ internal class SyncService : Service() {
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.Main + job)
     private var oldState: State = State.Stopped
+//    private var oldState: State? = null // todo
     private var serverSocket: ServerSocket? = null
 
     private fun InputStream.toHttpRequest(): HttpRequest {
@@ -209,11 +212,21 @@ internal class SyncService : Service() {
         return null
     }
 
-    private fun onState(newState: State) {
+    private suspend fun onState(newState: State) {
         val oldState = oldState
         this.oldState = newState
 //        Log.d(TAG, "old $oldState -> new $newState")
         when (oldState) {
+            null -> {
+                when (newState) {
+                    is State.Started -> TODO("old $oldState -> new $newState")
+                    State.Starting -> TODO("old $oldState -> new $newState")
+                    State.Stopped -> {
+                        // noop
+                    }
+                    State.Stopping -> TODO("old $oldState -> new $newState")
+                }
+            }
             State.Stopped -> {
                 when (newState) {
                     State.Stopped -> TODO("old $oldState -> new $newState")
@@ -284,12 +297,16 @@ internal class SyncService : Service() {
                 }
             }
         }
+        _broadcast.emit(Broadcast.OnState(newState))
+        if (newState == State.Stopped) {
+            stopSelf()
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "on create[${hashCode()}]...") // todo
-        state.drop(1).onEach(::onState).launchIn(scope)
+        state.onEach(::onState).launchIn(scope)
     }
 
     override fun onDestroy() {
@@ -318,7 +335,7 @@ internal class SyncService : Service() {
                 .flatMap { it.inetAddresses.asSequence() }
                 .toList()
             if (addresses.isEmpty()) error("No addresses!")
-            Log.d(TAG, "addresses: $addresses")
+//            Log.d(TAG, "addresses: $addresses")
             return addresses
                 .filterIsInstance<Inet4Address>()
                 .single { !it.isLoopbackAddress }
@@ -331,11 +348,13 @@ internal class SyncService : Service() {
         }
 
         fun startServer(context: Context) {
+            Log.d(TAG, "start server...")
             val intent = intent(context, Action.StartServer)
             context.startService(intent)
         }
 
         fun stopServer(context: Context) {
+            Log.d(TAG, "stop server...")
             val intent = intent(context, Action.StopServer)
             context.startService(intent)
         }
@@ -367,6 +386,7 @@ internal class SyncService : Service() {
         }
 
         fun startForeground(context: Context, title: String) {
+            Log.d(TAG, "start foreground...")
             val intent = intent(context, Action.StartForeground)
             val notification = context.buildNotification(title = title)
             context.notify(notification)
@@ -375,6 +395,7 @@ internal class SyncService : Service() {
         }
 
         fun stopForeground(context: Context) {
+            Log.d(TAG, "stop foreground...")
             val intent = intent(context, Action.StopForeground)
             context.startService(intent)
         }

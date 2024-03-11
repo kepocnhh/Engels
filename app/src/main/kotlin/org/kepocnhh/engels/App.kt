@@ -42,18 +42,29 @@ internal class App : Application() {
     }
 
     private fun onState(state: SyncService.State) {
-        when (state) {
-            is SyncService.State.Started -> {
-                SyncService.startForeground(this, title = "started: ${state.address}")
-            }
-            SyncService.State.Starting -> {
+        // todo
+    }
+
+    private fun onBroadcast(broadcast: SyncService.Broadcast) {
+        when (broadcast) {
+            is SyncService.Broadcast.OnError -> {
                 // todo
             }
-            SyncService.State.Stopped -> {
-                SyncService.stopForeground(this)
-            }
-            SyncService.State.Stopping -> {
-                // todo
+            is SyncService.Broadcast.OnState -> {
+                when (broadcast.state) {
+                    is SyncService.State.Started -> {
+                        SyncService.startForeground(this, title = "started: ${broadcast.state.address}")
+                    }
+                    SyncService.State.Starting -> {
+                        // todo
+                    }
+                    SyncService.State.Stopped -> {
+                        SyncService.stopForeground(this)
+                    }
+                    SyncService.State.Stopping -> {
+                        // todo
+                    }
+                }
             }
         }
     }
@@ -64,6 +75,10 @@ internal class App : Application() {
         SyncService.state
             .flowWithLifecycle(lifecycle, minActiveState = Lifecycle.State.CREATED)
             .onEach(::onState)
+            .launchIn(lifecycle.coroutineScope)
+        SyncService.broadcast
+            .flowWithLifecycle(lifecycle, minActiveState = Lifecycle.State.CREATED)
+            .onEach(::onBroadcast)
             .launchIn(lifecycle.coroutineScope)
         // todo
     }
