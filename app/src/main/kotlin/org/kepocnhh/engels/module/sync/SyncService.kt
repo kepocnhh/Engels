@@ -3,12 +3,15 @@ package org.kepocnhh.engels.module.sync
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.os.IBinder
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
@@ -18,12 +21,17 @@ import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 
 internal class SyncService : Service() {
+    sealed interface Broadcast {
+        data class OnError(val e: Throwable) : Broadcast
+    }
+
     sealed interface State {
         data object Stopped : State
         data object Stopping : State
@@ -43,10 +51,7 @@ internal class SyncService : Service() {
 
     private fun onSocketAccept(socket: Socket) {
         Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
-        val inputStream = socket.getInputStream()
-        Log.d(TAG, "on socket input stream $inputStream...")
-        val reader = BufferedReader(InputStreamReader(inputStream))
-        Log.d(TAG, "on socket reader $reader...")
+        val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
         val headers = mutableListOf<String>()
 //        val lines = reader.readLines()
         var contentLength: Int? = null
@@ -83,72 +88,66 @@ internal class SyncService : Service() {
         stream.flush()
     }
 
-    private fun onStarted(serverSocket: ServerSocket) {
+    private suspend fun onStarting(serverSocket: ServerSocket) {
+        val address = try {
+            getInetAddress().hostAddress ?: error("No address!")
+        } catch (e: Throwable) {
+            _broadcast.emit(Broadcast.OnError(e))
+            Log.w(TAG, "No address: $e")
+            _state.value = State.Stopped
+            return
+        }
+        if (this.serverSocket != null) TODO("State: ${state.value}")
+        this.serverSocket = serverSocket
+        Log.d(TAG, "on starting:$address:${serverSocket.localPort}")
+        _state.value = State.Started("$address:${serverSocket.localPort}")
         while (state.value is State.Started) {
             try {
-                serverSocket.accept()
+                serverSocket.accept().use(::onSocketAccept)
             } catch (e: SocketException) {
-                if (state.value !is State.Started) break
+                if (state.value is State.Stopping) break
                 TODO("error: $e")
             } catch (e: Throwable) {
                 TODO("error: $e")
-            }.use(::onSocketAccept)
+            }
         }
-        Log.d(TAG, "on finish socket...")
+        _state.value = State.Stopped
     }
 
     private fun onStarting() {
         Log.d(TAG, "on starting...")
-        if (state.value != State.Starting) error("connect state: $state")
-        val serverSocket = checkNotNull(serverSocket)
+        if (state.value != State.Starting) error("connect state: ${state.value}")
         scope.launch {
             withContext(Dispatchers.IO) {
-                val address = NetworkInterface
-                    .getNetworkInterfaces()
-                    .asSequence()
-                    .flatMap { it.inetAddresses.asSequence() }
-                    .filter { !it.isLoopbackAddress }
-                    .filterIsInstance<Inet4Address>()
-                    .single()
-                    .hostAddress
-                    ?: error("No address!")
-                Log.d(TAG, "on starting:$address:${serverSocket.localPort}")
-                _state.value = State.Started("$address:${serverSocket.localPort}")
-                onStarted(serverSocket)
+                onStarting(ServerSocket(0))
             }
         }
     }
 
     private fun onStartServer() {
         Log.d(TAG, "on start server...")
-        if (state.value != State.Stopped) error("connect state: $state")
+        if (state.value != State.Stopped) error("connect state: ${state.value}")
+        _state.value = State.Starting
+    }
+
+    private fun onStopping() {
+        Log.d(TAG, "on stopping...")
+        if (state.value != State.Stopping) error("connect state: ${state.value}")
         scope.launch {
             withContext(Dispatchers.IO) {
-                if (serverSocket != null) TODO("State: $state")
-                serverSocket = ServerSocket(0)
+                try {
+                    checkNotNull(serverSocket).close()
+                } finally {
+                    serverSocket = null
+                }
             }
-            _state.value = State.Starting
         }
     }
 
     private fun onStopServer() {
         Log.d(TAG, "on stop server...")
-        if (state.value !is State.Started) error("connect state: $state")
-        scope.launch {
-            _state.value = State.Stopping
-        }
-    }
-
-    private fun onStopping() {
-        Log.d(TAG, "on stopping...")
-        if (state.value != State.Stopping) error("connect state: $state")
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                checkNotNull(serverSocket).close()
-                serverSocket = null
-            }
-            _state.value = State.Stopped
-        }
+        if (state.value !is State.Started) error("connect state: ${state.value}")
+        _state.value = State.Stopping
     }
 
     private fun onStartCommand(intent: Intent) {
@@ -156,12 +155,8 @@ internal class SyncService : Service() {
         if (intentAction.isEmpty()) error("Intent action is empty!")
         val action = Action.entries.firstOrNull { it.name == intentAction } ?: error("No action!")
         when (action) {
-            Action.StartServer -> {
-                onStartServer()
-            }
-            Action.StopServer -> {
-                onStopServer()
-            }
+            Action.StartServer -> onStartServer()
+            Action.StopServer -> onStopServer()
         }
     }
 
@@ -198,7 +193,14 @@ internal class SyncService : Service() {
             }
             State.Starting -> {
                 when (newState) {
-                    State.Stopped -> TODO("old $oldState -> new $newState")
+                    State.Stopped -> {
+                        val message = """
+                              * $oldState
+                             /
+                            * $newState
+                        """.trimIndent()
+                        Log.d(TAG, message)
+                    }
                     State.Starting -> TODO("old $oldState -> new $newState")
                     is State.Started -> {
                         val message = """
@@ -248,7 +250,7 @@ internal class SyncService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "on create[${hashCode()}]...") // todo
-        state.drop(1).onEach(::onState).launchIn(scope)
+        state.onEach(::onState).launchIn(scope)
     }
 
     override fun onDestroy() {
@@ -260,8 +262,25 @@ internal class SyncService : Service() {
     companion object {
         private const val TAG = "[Sync]"
 
+        private val _broadcast = MutableSharedFlow<Broadcast>()
+        val broadcast = _broadcast.asSharedFlow()
+
         private val _state = MutableStateFlow<State>(State.Stopped)
         val state = _state.asStateFlow()
+
+        private fun getInetAddress(): InetAddress {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            if (!interfaces.hasMoreElements()) error("No interfaces!")
+            val addresses = interfaces
+                .asSequence()
+                .flatMap { it.inetAddresses.asSequence() }
+                .toList()
+            if (addresses.isEmpty()) error("No addresses!")
+            Log.d(TAG, "addresses: $addresses")
+            return addresses
+                .filterIsInstance<Inet4Address>()
+                .single { !it.isLoopbackAddress }
+        }
 
         private fun intent(context: Context, action: Action): Intent {
             val intent = Intent(context, SyncService::class.java)

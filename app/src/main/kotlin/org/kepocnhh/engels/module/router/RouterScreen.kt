@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.collect
 import org.kepocnhh.engels.App
 import org.kepocnhh.engels.BuildConfig
 import org.kepocnhh.engels.module.sync.SyncService
@@ -26,7 +28,17 @@ import org.kepocnhh.engels.util.showToast
 @Composable
 internal fun RouterScreen() {
     val TAG = "[Router]"
+    val context = LocalContext.current
     val insets = App.Theme.insets
+    LaunchedEffect(Unit) {
+        SyncService.broadcast.collect {
+            when (it) {
+                is SyncService.Broadcast.OnError -> {
+                    context.showToast("Error: ${it.e}")
+                }
+            }
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -46,7 +58,6 @@ internal fun RouterScreen() {
             """.trimIndent()
             BasicText(text = text)
             Spacer(modifier = Modifier.weight(1f))
-            val context = LocalContext.current
             val syncState = SyncService.state.collectAsState().value
             when (syncState) {
                 SyncService.State.Stopped -> {
