@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.Inet4Address
 import java.net.InetAddress
@@ -57,34 +58,52 @@ internal class SyncService : Service() {
     private var oldState: State = State.Stopped
     private var serverSocket: ServerSocket? = null
 
-    private fun onSocketAccept(socket: Socket) {
-        Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
-        val reader = socket.getInputStream().bufferedReader()
-        val headers = mutableListOf<String>()
-//        val lines = reader.readLines()
-        var contentLength: Int? = null
+    private fun InputStream.toHttpRequest(): HttpRequest {
+        val reader = bufferedReader()
+        // GET /foo/bar HTTP/1.1
+        val firstHeader = reader.readLine()
+        check(!firstHeader.isNullOrBlank())
+        val split = firstHeader.split(" ")
+        check(split.size == 3)
+        val method = split[0]
+        val query = split[1]
+        val httpVersion = split[2]
+        val version = httpVersion.split("/")[1]
+        val headers = mutableMapOf<String, String>()
         while (true) {
-            val header = reader.readLine()
-            if (header.isNullOrEmpty()) break
-            headers.add(header)
-            val index = header.indexOf(':')
+            val line = reader.readLine()
+            if (line.isNullOrEmpty()) break
+            val index = line.indexOf(':')
             if (index < 1) continue
-            if (index > header.length - 3) continue
-            val key = header.substring(0, index)
-            val value = header.substring(index + 2, header.length)
-            if (key.equals("Content-Length", true)) {
-                contentLength = value.toIntOrNull()
-            }
+            if (index > line.length - 3) continue
+            val key = line.substring(0, index)
+            val value = line.substring(index + 2, line.length)
+            headers[key] = value
         }
-        val request = headers.joinToString(separator = "\n")
-        Log.d(TAG, "request:\n\t---\n$request\n\t---")
-        val body = contentLength?.takeIf { it > 0 }?.let {
-            ByteArray(it) {
+        val body: ByteArray? = headers.entries.firstOrNull { (key, _) ->
+            key.equals("Content-Length", true)
+        }?.let { (_, value) ->
+            value.toIntOrNull()
+        }?.let { contentLength ->
+            ByteArray(contentLength) {
                 reader.read().toByte()
             }
         }
-        if (body != null) {
-            Log.d(TAG, "request:body:\n\t---\n${String(body)}\n\t---")
+        return HttpRequest(
+            version = version,
+            method = method,
+            query = query,
+            headers = headers,
+            body = body,
+        )
+    }
+
+    private fun onSocketAccept(socket: Socket) {
+        Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
+        val request = socket.getInputStream().toHttpRequest()
+        Log.d(TAG, "request:\n\t---\n${request.headers.toList().joinToString(separator = "\n")}\n\t---")
+        if (request.body != null) {
+            Log.d(TAG, "request:body:\n\t---\n${String(request.body)}\n\t---")
         }
         val response = StringBuilder()
             .append("HTTP/1.1 200 Success")
