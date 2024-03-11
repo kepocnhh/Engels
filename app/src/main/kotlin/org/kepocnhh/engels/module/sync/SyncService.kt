@@ -59,7 +59,7 @@ internal class SyncService : Service() {
 
     private fun onSocketAccept(socket: Socket) {
         Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
-        val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
+        val reader = socket.getInputStream().bufferedReader()
         val headers = mutableListOf<String>()
 //        val lines = reader.readLines()
         var contentLength: Int? = null
@@ -127,7 +127,9 @@ internal class SyncService : Service() {
         if (state.value != State.Starting) error("connect state: ${state.value}")
         scope.launch {
             withContext(Dispatchers.IO) {
-                onStarting(ServerSocket(0))
+//                val portNumber = 0 // todo
+                val portNumber = 40631
+                onStarting(ServerSocket(portNumber))
             }
         }
     }
