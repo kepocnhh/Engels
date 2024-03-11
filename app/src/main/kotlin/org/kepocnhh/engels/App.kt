@@ -44,7 +44,7 @@ internal class App : Application() {
     private fun onState(state: SyncService.State) {
         when (state) {
             is SyncService.State.Started -> {
-                // todo
+                SyncService.startForeground(this, title = "started: ${state.address}")
             }
             SyncService.State.Starting -> {
                 // todo

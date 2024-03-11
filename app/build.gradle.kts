@@ -102,6 +102,7 @@ androidComponents.onVariants { variant ->
                 }
                 val applicationId by variant.applicationId
                 val expected = setOf(
+                    "android.permission.FOREGROUND_SERVICE",
                     "android.permission.INTERNET",
                     "android.permission.POST_NOTIFICATIONS",
                     "$applicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",

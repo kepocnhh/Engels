@@ -169,6 +169,9 @@ internal class SyncService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
             }
             Action.StartForeground -> {
+                val notificationId: Int = intent.getIntExtra("notificationId", -1)
+                val notification: Notification = intent.getParcelableExtra("notification") ?: TODO()
+                startForeground(notificationId, notification)
             }
         }
     }
@@ -314,8 +317,8 @@ internal class SyncService : Service() {
             context.startService(intent)
         }
 
-        private fun notify(context: Context, notification: Notification) {
-            val notificationManager = context.getSystemService(NotificationManager::class.java)
+        private fun Context.notify(notification: Notification) {
+            val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.checkChannel()
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
@@ -342,7 +345,9 @@ internal class SyncService : Service() {
 
         fun startForeground(context: Context, title: String) {
             val intent = intent(context, Action.StartForeground)
-            intent.putExtra("notification", context.buildNotification(title = title))
+            val notification = context.buildNotification(title = title)
+            context.notify(notification)
+            intent.putExtra("notification", notification)
             context.startService(intent)
         }
 
