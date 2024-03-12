@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.kepocnhh.engels.module.sync.SyncService.Companion.notify
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.Inet4Address
@@ -73,6 +74,7 @@ internal class SyncService : Service() {
         check(protocol.size == 2)
         check(protocol[0] == "HTTP")
         val version = protocol[1]
+        check(version == "1.1")
         val method = split[0]
         val query = split[1]
         val headers = mutableMapOf<String, String>()
@@ -111,13 +113,23 @@ internal class SyncService : Service() {
         if (request.body != null) {
             Log.d(TAG, "request:body:${request.body.size}\n\t---\n${String(request.body)}\n\t---")
         }
-        val response = StringBuilder()
-            .append("HTTP/1.1 200 Success")
+        val response = HttpResponse(
+            version = "1.1",
+            code = 200,
+            message = "Success",
+        )
+        val bytes = StringBuilder()
+            .append("HTTP/${response.version}")
+            .append(" ")
+            .append(response.code.toString())
+            .append(" ")
+            .append(response.message)
             .append("\r\n")
             .append("\r\n")
             .toString()
+            .toByteArray()
         val stream = socket.getOutputStream()
-        stream.write(response.toByteArray())
+        stream.write(bytes)
         stream.flush()
     }
 
