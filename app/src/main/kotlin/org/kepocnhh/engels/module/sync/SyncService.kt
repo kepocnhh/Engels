@@ -66,15 +66,15 @@ internal class SyncService : Service() {
 
     private fun onSocketAccept(socket: Socket) {
         Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
-        val request = HttpRequest.of(socket.getInputStream())
+        val request = HttpRequest.read(socket.getInputStream())
         Log.d(TAG, "request:${request.method}:${request.query}\n\t---\n${request.headers.toList().joinToString(separator = "\n")}\n\t---")
         if (request.body != null) {
             Log.d(TAG, "request:body:${request.body.size}\n\t---\n${String(request.body)}\n\t---")
         }
-//        val responseBody: ByteArray? = null
-        val responseBody: ByteArray? = """
-            {"time": ${System.currentTimeMillis()}}
-        """.trimIndent().toByteArray()
+        val responseBody: ByteArray? = null
+//        val responseBody: ByteArray? = """
+//            {"time": ${System.currentTimeMillis()}}
+//        """.trimIndent().toByteArray()
         val response = HttpResponse(
             version = "1.1",
             code = 200,
@@ -84,22 +84,7 @@ internal class SyncService : Service() {
             ) + responseBody?.getContentHeaders("application/json").orEmpty(),
             body = responseBody,
         )
-        val builder = StringBuilder()
-            .append("HTTP/${response.version}")
-            .append(" ")
-            .append(response.code.toString())
-            .append(" ")
-            .append(response.message)
-            .append("\r\n")
-        response.headers.forEach { (key, value) ->
-            builder.append("$key: $value")
-                .append("\r\n")
-        }
-        builder.append("\r\n")
-        val bytes = builder.toString().toByteArray() + (response.body ?: ByteArray(0))
-        val stream = socket.getOutputStream()
-        stream.write(bytes)
-        stream.flush()
+        HttpResponse.write(response, socket.getOutputStream())
     }
 
     private suspend fun onStarting(serverSocket: ServerSocket) {

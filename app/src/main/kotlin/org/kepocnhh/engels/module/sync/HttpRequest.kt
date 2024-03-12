@@ -10,7 +10,7 @@ internal class HttpRequest(
     val body: ByteArray?,
 ) {
     companion object {
-        fun of(stream: InputStream): HttpRequest {
+        fun read(stream: InputStream): HttpRequest {
             val reader = stream.bufferedReader()
             // GET /foo/bar HTTP/1.1
             val firstHeader = reader.readLine()
