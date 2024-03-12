@@ -34,7 +34,7 @@ internal fun RouterScreen() {
         SyncService.broadcast.collect {
             when (it) {
                 is SyncService.Broadcast.OnError -> {
-                    context.showToast("Error: ${it.e}")
+                    context.showToast("Error: ${it.error}")
                 }
                 is SyncService.Broadcast.OnState -> {
                     // todo

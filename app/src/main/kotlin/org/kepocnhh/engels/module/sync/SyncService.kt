@@ -40,7 +40,7 @@ import kotlin.math.absoluteValue
 
 internal class SyncService : Service() {
     sealed interface Broadcast {
-        data class OnError(val e: Throwable) : Broadcast
+        data class OnError(val error: Throwable) : Broadcast
         data class OnState(val state: State) : Broadcast
     }
 
