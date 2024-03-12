@@ -2,7 +2,7 @@ package org.kepocnhh.engels.module.sync
 
 import java.io.OutputStream
 
-internal class HttpResponse(
+class HttpResponse(
     val version: String,
     val code: Int,
     val message: String,

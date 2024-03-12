@@ -2,7 +2,7 @@ package org.kepocnhh.engels.module.sync
 
 import java.io.InputStream
 
-internal class HttpRequest(
+class HttpRequest(
     val version: String,
     val method: String,
     val query: String,

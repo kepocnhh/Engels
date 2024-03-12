@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collect
 import org.kepocnhh.engels.App
 import org.kepocnhh.engels.BuildConfig
+import org.kepocnhh.engels.module.sync.HttpService
 import org.kepocnhh.engels.module.sync.SyncService
 import org.kepocnhh.engels.util.showToast
 
@@ -33,10 +34,10 @@ internal fun RouterScreen() {
     LaunchedEffect(Unit) {
         SyncService.broadcast.collect {
             when (it) {
-                is SyncService.Broadcast.OnError -> {
+                is HttpService.Broadcast.OnError -> {
                     context.showToast("Error: ${it.error}")
                 }
-                is SyncService.Broadcast.OnState -> {
+                is HttpService.Broadcast.OnState -> {
                     // todo
                 }
             }
@@ -63,20 +64,20 @@ internal fun RouterScreen() {
             Spacer(modifier = Modifier.weight(1f))
             val syncState = SyncService.state.collectAsState().value
             when (syncState) {
-                SyncService.State.Stopped -> {
+                HttpService.State.Stopped -> {
                     BasicText(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(64.dp)
                             .clickable {
                                 Log.d(TAG, "start server...")
-                                SyncService.startServer(context)
+                                HttpService.startService<SyncService>(context, HttpService.Action.StartServer)
                             }
                             .wrapContentSize(),
                         text = "start server",
                     )
                 }
-                is SyncService.State.Started -> {
+                is HttpService.State.Started -> {
                     BasicText(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -90,16 +91,16 @@ internal fun RouterScreen() {
                             .height(64.dp)
                             .clickable {
                                 Log.d(TAG, "stop server...")
-                                SyncService.stopServer(context)
+                                HttpService.startService<SyncService>(context, HttpService.Action.StopServer)
                             }
                             .wrapContentSize(),
                         text = "stop server",
                     )
                 }
-                SyncService.State.Starting -> {
+                HttpService.State.Starting -> {
                     // todo
                 }
-                SyncService.State.Stopping -> {
+                HttpService.State.Stopping -> {
                     // todo
                 }
             }

@@ -14,6 +14,7 @@ import androidx.lifecycle.coroutineScope
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import org.kepocnhh.engels.module.sync.HttpService
 import org.kepocnhh.engels.module.sync.SyncService
 import org.kepocnhh.engels.util.compose.LocalOnBackPressedDispatcher
 import org.kepocnhh.engels.util.compose.toPaddings
@@ -41,27 +42,27 @@ internal class App : Application() {
         }
     }
 
-    private fun onState(state: SyncService.State) {
+    private fun onState(state: HttpService.State) {
         // todo
     }
 
-    private fun onBroadcast(broadcast: SyncService.Broadcast) {
+    private fun onBroadcast(broadcast: HttpService.Broadcast) {
         when (broadcast) {
-            is SyncService.Broadcast.OnError -> {
+            is HttpService.Broadcast.OnError -> {
                 // todo
             }
-            is SyncService.Broadcast.OnState -> {
+            is HttpService.Broadcast.OnState -> {
                 when (broadcast.state) {
-                    is SyncService.State.Started -> {
+                    is HttpService.State.Started -> {
                         SyncService.startForeground(this, title = "started: ${broadcast.state.address}")
                     }
-                    SyncService.State.Starting -> {
+                    HttpService.State.Starting -> {
                         // todo
                     }
-                    SyncService.State.Stopped -> {
-                        SyncService.stopForeground(this)
+                    HttpService.State.Stopped -> {
+                        HttpService.startService<SyncService>(this, HttpService.Action.StopForeground)
                     }
-                    SyncService.State.Stopping -> {
+                    HttpService.State.Stopping -> {
                         // todo
                     }
                 }
