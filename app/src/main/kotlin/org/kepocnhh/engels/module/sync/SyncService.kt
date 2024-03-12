@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.kepocnhh.engels.BuildConfig
 import org.kepocnhh.engels.module.sync.SyncService.Companion.notify
 import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
@@ -117,17 +118,23 @@ internal class SyncService : Service() {
             version = "1.1",
             code = 200,
             message = "Success",
+            headers = mapOf(
+                "User-Agent" to "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}",
+            ),
         )
-        val bytes = StringBuilder()
+        val builder = StringBuilder()
             .append("HTTP/${response.version}")
             .append(" ")
             .append(response.code.toString())
             .append(" ")
             .append(response.message)
             .append("\r\n")
-            .append("\r\n")
-            .toString()
-            .toByteArray()
+        response.headers.forEach { (key, value) ->
+            builder.append("$key: $value")
+                .append("\r\n")
+        }
+        builder.append("\r\n")
+        val bytes = builder.toString().toByteArray()
         val stream = socket.getOutputStream()
         stream.write(bytes)
         stream.flush()
