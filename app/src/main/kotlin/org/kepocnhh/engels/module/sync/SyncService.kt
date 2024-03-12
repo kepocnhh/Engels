@@ -64,52 +64,9 @@ internal class SyncService : Service() {
 //    private var oldState: State? = null // todo
     private var serverSocket: ServerSocket? = null
 
-    private fun InputStream.toHttpRequest(): HttpRequest {
-        val reader = bufferedReader()
-        // GET /foo/bar HTTP/1.1
-        val firstHeader = reader.readLine()
-        check(!firstHeader.isNullOrBlank())
-        val split = firstHeader.split(" ")
-        check(split.size == 3)
-        val protocol = split[2].split("/")
-        check(protocol.size == 2)
-        check(protocol[0] == "HTTP")
-        val version = protocol[1]
-        check(version == "1.1")
-        val method = split[0]
-        val query = split[1]
-        val headers = mutableMapOf<String, String>()
-        while (true) {
-            val line = reader.readLine()
-            if (line.isNullOrEmpty()) break
-            val index = line.indexOf(':')
-            if (index < 1) continue
-            if (index > line.length - 3) continue
-            val key = line.substring(0, index)
-            val value = line.substring(index + 2, line.length)
-            headers[key] = value
-        }
-        val body: ByteArray? = headers.entries.firstOrNull { (key, _) ->
-            key.equals("Content-Length", true)
-        }?.let { (_, value) ->
-            value.toIntOrNull()
-        }?.let { contentLength ->
-            ByteArray(contentLength) {
-                reader.read().toByte()
-            }
-        }
-        return HttpRequest(
-            version = version,
-            method = method,
-            query = query,
-            headers = headers,
-            body = body,
-        )
-    }
-
     private fun onSocketAccept(socket: Socket) {
         Log.d(TAG, "on socket accept(${socket.remoteSocketAddress})...")
-        val request = socket.getInputStream().toHttpRequest()
+        val request = HttpRequest.of(socket.getInputStream())
         Log.d(TAG, "request:${request.method}:${request.query}\n\t---\n${request.headers.toList().joinToString(separator = "\n")}\n\t---")
         if (request.body != null) {
             Log.d(TAG, "request:body:${request.body.size}\n\t---\n${String(request.body)}\n\t---")
@@ -124,9 +81,7 @@ internal class SyncService : Service() {
             message = "Success",
             headers = mapOf(
                 "User-Agent" to "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}",
-                "Content-Type" to "application/json",
-                "Content-Length" to "${responseBody?.size ?: 0}",
-            ),
+            ) + responseBody?.getContentHeaders("application/json").orEmpty(),
             body = responseBody,
         )
         val builder = StringBuilder()

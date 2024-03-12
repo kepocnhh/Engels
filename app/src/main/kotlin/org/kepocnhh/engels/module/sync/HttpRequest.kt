@@ -1,9 +1,56 @@
 package org.kepocnhh.engels.module.sync
 
-class HttpRequest(
+import java.io.InputStream
+
+internal class HttpRequest(
     val version: String,
     val method: String,
     val query: String,
     val headers: Map<String, String>,
     val body: ByteArray?,
-)
+) {
+    companion object {
+        fun of(stream: InputStream): HttpRequest {
+            val reader = stream.bufferedReader()
+            // GET /foo/bar HTTP/1.1
+            val firstHeader = reader.readLine()
+            check(!firstHeader.isNullOrBlank())
+            val split = firstHeader.split(" ")
+            check(split.size == 3)
+            val protocol = split[2].split("/")
+            check(protocol.size == 2)
+            check(protocol[0] == "HTTP")
+            val version = protocol[1]
+            check(version == "1.1")
+            val method = split[0]
+            val query = split[1]
+            val headers = mutableMapOf<String, String>()
+            while (true) {
+                val line = reader.readLine()
+                if (line.isNullOrEmpty()) break
+                val index = line.indexOf(':')
+                if (index < 1) continue
+                if (index > line.length - 3) continue
+                val key = line.substring(0, index)
+                val value = line.substring(index + 2, line.length)
+                headers[key] = value
+            }
+            val body: ByteArray? = headers.entries.firstOrNull { (key, _) ->
+                key.equals("Content-Length", true)
+            }?.let { (_, value) ->
+                value.toIntOrNull()
+            }?.let { contentLength ->
+                ByteArray(contentLength) {
+                    reader.read().toByte()
+                }
+            }
+            return HttpRequest(
+                version = version,
+                method = method,
+                query = query,
+                headers = headers,
+                body = body,
+            )
+        }
+    }
+}
