@@ -114,13 +114,20 @@ internal class SyncService : Service() {
         if (request.body != null) {
             Log.d(TAG, "request:body:${request.body.size}\n\t---\n${String(request.body)}\n\t---")
         }
+//        val responseBody: ByteArray? = null
+        val responseBody: ByteArray? = """
+            {"time": ${System.currentTimeMillis()}}
+        """.trimIndent().toByteArray()
         val response = HttpResponse(
             version = "1.1",
             code = 200,
             message = "Success",
             headers = mapOf(
                 "User-Agent" to "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}",
+                "Content-Type" to "application/json",
+                "Content-Length" to "${responseBody?.size ?: 0}",
             ),
+            body = responseBody,
         )
         val builder = StringBuilder()
             .append("HTTP/${response.version}")
@@ -134,7 +141,7 @@ internal class SyncService : Service() {
                 .append("\r\n")
         }
         builder.append("\r\n")
-        val bytes = builder.toString().toByteArray()
+        val bytes = builder.toString().toByteArray() + (response.body ?: ByteArray(0))
         val stream = socket.getOutputStream()
         stream.write(bytes)
         stream.flush()

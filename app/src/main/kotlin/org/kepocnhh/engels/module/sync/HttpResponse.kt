@@ -5,4 +5,5 @@ class HttpResponse(
     val code: Int,
     val message: String,
     val headers: Map<String, String>,
+    val body: ByteArray?,
 )
