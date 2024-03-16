@@ -35,15 +35,13 @@ class HttpRequest(
                 val value = line.substring(index + 2, line.length)
                 headers[key] = value
             }
-            val body: ByteArray? = headers.entries.firstOrNull { (key, _) ->
-                key.equals("Content-Length", true)
-            }?.let { (_, value) ->
-                value.toIntOrNull()
-            }?.let { contentLength ->
-                ByteArray(contentLength) {
-                    reader.read().toByte()
+            val body = headers["Content-Length"]
+                ?.toIntOrNull()
+                ?.let {
+                    ByteArray(it) {
+                        reader.read().toByte()
+                    }
                 }
-            }
             return HttpRequest(
                 version = version,
                 method = method,

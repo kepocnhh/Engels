@@ -245,15 +245,12 @@ abstract class HttpService(
         private fun getInetAddress(): InetAddress {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             if (!interfaces.hasMoreElements()) error("No interfaces!")
-            val addresses = interfaces
+            return interfaces
                 .asSequence()
                 .flatMap { it.inetAddresses.asSequence() }
-                .toList()
-            if (addresses.isEmpty()) error("No addresses!")
-//            Log.d(TAG, "addresses: $addresses")
-            return addresses
                 .filterIsInstance<Inet4Address>()
-                .single { !it.isLoopbackAddress }
+                .firstOrNull { !it.isLoopbackAddress }
+                ?: error("No addresses!")
         }
 
         inline fun <reified T : HttpService> startService(context: Context, action: Action) {
