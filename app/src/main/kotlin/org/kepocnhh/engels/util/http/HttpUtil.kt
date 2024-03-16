@@ -1,4 +1,4 @@
-package org.kepocnhh.engels.module.sync
+package org.kepocnhh.engels.util.http
 
 
 internal fun ByteArray.getContentHeaders(type: String): Map<String, String> {

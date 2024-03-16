@@ -1,4 +1,4 @@
-package org.kepocnhh.engels.module.sync
+package org.kepocnhh.engels.util.http
 
 import java.io.InputStream
 
@@ -12,7 +12,6 @@ class HttpRequest(
     companion object {
         fun read(stream: InputStream): HttpRequest {
             val reader = stream.bufferedReader()
-            // GET /foo/bar HTTP/1.1
             val firstHeader = reader.readLine()
             check(!firstHeader.isNullOrBlank())
             val split = firstHeader.split(" ")
@@ -21,7 +20,7 @@ class HttpRequest(
             check(protocol.size == 2)
             check(protocol[0] == "HTTP")
             val version = protocol[1]
-            check(version == "1.1")
+            check(version == "1.1") // todo 505 HTTP Version Not Supported
             val method = split[0]
             val query = split[1]
             val headers = mutableMapOf<String, String>()

@@ -1,4 +1,4 @@
-package org.kepocnhh.engels.module.sync
+package org.kepocnhh.engels.util.http
 
 import android.app.Notification
 import android.app.Service
@@ -113,13 +113,13 @@ abstract class HttpService(
                             code = 500,
                             message = "Internal Server Error",
                             headers = mapOf(
-                                "User-Agent" to HttpService::class.java.name,
+                                "User-Agent" to environment.userAgent,
                             ),
                             body = null,
                         ) // todo
                     }
                     HttpResponse.write(response, socket.getOutputStream())
-                    log(response)
+                    log(response) // todo
                 }
             } catch (e: SocketException) {
                 if (environment.state.value is State.Stopping) break
@@ -294,6 +294,109 @@ abstract class HttpService(
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
+    }
+
+    protected fun noBodyResponse(
+        code: Int,
+        message: String,
+    ): HttpResponse {
+        return HttpResponse(
+            version = "1.1",
+            code = code,
+            message = message,
+            headers = mapOf(
+                "User-Agent" to environment.userAgent,
+            ),
+            body = null,
+        )
+    }
+
+    protected fun jsonResponse(
+        code: Int,
+        message: String,
+        json: String,
+    ): HttpResponse {
+        val body = json.toByteArray()
+        return HttpResponse(
+            version = "1.1",
+            code = code,
+            message = message,
+            headers = mapOf(
+                "User-Agent" to environment.userAgent,
+                "Content-Type" to "application/json",
+                "Content-Length" to body.size.toString(),
+            ),
+            body = body,
+        )
+    }
+
+    protected sealed interface ParseBodyResult<out T : Any> {
+        class Success<T : Any>(val value: T) : ParseBodyResult<T>
+        class Failure(val type: Type) : ParseBodyResult<Nothing> {
+            enum class Type {
+                NoBody,
+                EmptyBody,
+                WrongContentType,
+                WrongBody,
+                UnexpectedBody,
+            }
+        }
+    }
+
+    protected fun ParseBodyResult.Failure.toResponse(): HttpResponse {
+        return jsonResponse(
+            code = 400,
+            message = "Bad Request",
+            json = JSONObject()
+                .put("Type", type.name)
+                .toString(),
+        )
+    }
+
+    protected fun <T : Any> HttpRequest.parseBodyJson(
+        transform: (JSONObject) -> T,
+    ): ParseBodyResult<T> {
+        return parseBody(
+            supported = {
+                setOf("application/json")
+            },
+            processing = {
+                JSONObject(String(it))
+            },
+            transform = transform,
+        )
+    }
+
+    protected fun <B : Any, R : Any> HttpRequest.parseBody(
+        supported: () -> Set<String>? = { null },
+        processing: (ByteArray) -> B,
+        transform: (B) -> R,
+    ): ParseBodyResult<R> {
+        if (body == null) {
+            return ParseBodyResult.Failure(ParseBodyResult.Failure.Type.NoBody)
+        }
+        if (body.isEmpty()) {
+            return ParseBodyResult.Failure(ParseBodyResult.Failure.Type.EmptyBody)
+        }
+        val types = supported()
+        if (types != null) {
+            try {
+                check(types.contains(headers["Content-Type"]))
+            } catch (e: Throwable) {
+                return ParseBodyResult.Failure(ParseBodyResult.Failure.Type.WrongContentType)
+            }
+        }
+        val data = try {
+            processing(body)
+        } catch (e: Throwable) {
+            return ParseBodyResult.Failure(ParseBodyResult.Failure.Type.WrongBody)
+        }
+        val result = try {
+            transform(data)
+        } catch (e: Throwable) {
+            return ParseBodyResult.Failure(ParseBodyResult.Failure.Type.UnexpectedBody)
+        }
+        return ParseBodyResult.Success(result)
     }
 
     companion object {

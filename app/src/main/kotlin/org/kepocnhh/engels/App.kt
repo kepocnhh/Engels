@@ -15,11 +15,11 @@ import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import org.kepocnhh.engels.entity.Meta
-import org.kepocnhh.engels.module.sync.HttpService
 import org.kepocnhh.engels.module.sync.SyncService
 import org.kepocnhh.engels.provider.LocalDataProvider
 import org.kepocnhh.engels.util.compose.LocalOnBackPressedDispatcher
 import org.kepocnhh.engels.util.compose.toPaddings
+import org.kepocnhh.engels.util.http.HttpService
 
 internal class App : Application() {
     object Theme {

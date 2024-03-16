@@ -22,8 +22,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collect
 import org.kepocnhh.engels.App
 import org.kepocnhh.engels.BuildConfig
-import org.kepocnhh.engels.module.sync.HttpService
 import org.kepocnhh.engels.module.sync.SyncService
+import org.kepocnhh.engels.util.http.HttpService
 import org.kepocnhh.engels.util.showToast
 
 @Composable

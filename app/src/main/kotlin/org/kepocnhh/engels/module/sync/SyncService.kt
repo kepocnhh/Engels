@@ -13,6 +13,10 @@ import org.json.JSONObject
 import org.kepocnhh.engels.App
 import org.kepocnhh.engels.BuildConfig
 import org.kepocnhh.engels.entity.Meta
+import org.kepocnhh.engels.util.http.HttpEnvironment
+import org.kepocnhh.engels.util.http.HttpRequest
+import org.kepocnhh.engels.util.http.HttpResponse
+import org.kepocnhh.engels.util.http.HttpService
 import java.util.Date
 import java.util.UUID
 import kotlin.math.absoluteValue
@@ -28,82 +32,17 @@ internal class SyncService : HttpService(_environment) {
         )
     }
 
-    private fun noBodyResponse(
-        code: Int,
-        message: String,
-    ): HttpResponse {
-        return HttpResponse(
-            version = "1.1",
-            code = code,
-            message = message,
-            headers = mapOf(
-                "User-Agent" to _userAgent,
-            ),
-            body = null,
-        )
-    }
-
-    private fun jsonResponse(
-        code: Int,
-        message: String,
-        jsonObject: JSONObject,
-    ): HttpResponse {
-        val bytes = jsonObject
-            .toString()
-            .toByteArray()
-        return HttpResponse(
-            version = "1.1",
-            code = code,
-            message = message,
-            headers = mapOf(
-                "User-Agent" to _userAgent,
-                "Content-Type" to "application/json",
-                "Content-Length" to bytes.size.toString(),
-            ),
-            body = bytes,
-        )
-    }
-
     override fun onSocketAccept(request: HttpRequest): HttpResponse {
         when (request.query) {
             "/sync" -> {
                 when (request.method) {
                     "POST" -> {
-                        if (request.body == null) {
-                            return jsonResponse(
-                                code = 400,
-                                message = "Bad Request",
-                                jsonObject = JSONObject()
-                                    .put("message", "No body!"),
-                            )
+                        val result = request.parseBodyJson {
+                            it.toMeta()
                         }
-                        if (request.body.isEmpty()) {
-                            return jsonResponse(
-                                code = 400,
-                                message = "Bad Request",
-                                jsonObject = JSONObject()
-                                    .put("message", "Body is empty!"),
-                            )
-                        }
-                        val clientMetaJson = try {
-                            JSONObject(String(request.body))
-                        } catch (e: Throwable) {
-                            return jsonResponse(
-                                code = 400,
-                                message = "Bad Request",
-                                jsonObject = JSONObject()
-                                    .put("message", "Wrong json!"),
-                            )
-                        }
-                        val clientMeta = try {
-                            clientMetaJson.toMeta()
-                        } catch (e: Throwable) {
-                            return jsonResponse(
-                                code = 400,
-                                message = "Bad Request",
-                                jsonObject = JSONObject()
-                                    .put("message", "Wrong body!"),
-                            )
+                        val clientMeta = when (result) {
+                            is ParseBodyResult.Failure -> return result.toResponse()
+                            is ParseBodyResult.Success -> result.value
                         }
                         val serverMeta = App.ldp.metas.firstOrNull {
                             it.id == clientMeta.id
@@ -113,8 +52,9 @@ internal class SyncService : HttpService(_environment) {
                             return jsonResponse(
                                 code = 200,
                                 message = "Success",
-                                jsonObject = JSONObject()
-                                    .put("Status", "Created"),
+                                json = JSONObject()
+                                    .put("Status", "Created")
+                                    .toString(),
                             )
                         }
                         if (clientMeta.created != serverMeta.created) {
@@ -127,8 +67,9 @@ internal class SyncService : HttpService(_environment) {
                             return jsonResponse(
                                 code = 200,
                                 message = "Success",
-                                jsonObject = JSONObject()
-                                    .put("Status", "Updated"),
+                                json = JSONObject()
+                                    .put("Status", "Updated")
+                                    .toString(),
                             )
                         } else {
                             when {
@@ -142,8 +83,9 @@ internal class SyncService : HttpService(_environment) {
                                     return jsonResponse(
                                         code = 200,
                                         message = "Success",
-                                        jsonObject = JSONObject()
-                                            .put("Status", "UpdateRequired"),
+                                        json = JSONObject()
+                                            .put("Status", "UpdateRequired")
+                                            .toString(),
                                     )
                                 }
                             }
@@ -164,21 +106,8 @@ internal class SyncService : HttpService(_environment) {
         )
     }
 
-    override fun onInternalErrorIntercept(error: Throwable): HttpResponse? {
-        return HttpResponse(
-            version = "1.1",
-            code = 500,
-            message = "Internal Server Error",
-            headers = mapOf(
-                "User-Agent" to _userAgent,
-            ),
-            body = null,
-        )
-    }
-
     companion object {
         private const val TAG = "[Sync]"
-        private const val _userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}"
         private val _channel = NotificationChannel(
             "${SyncService::class.java.name}:CHANNEL",
             "Sync service",
@@ -186,6 +115,7 @@ internal class SyncService : HttpService(_environment) {
         )
         private val NOTIFICATION_ID = System.currentTimeMillis().toInt().absoluteValue
         private val _environment = HttpEnvironment(
+            userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}",
             initialState = State.Stopped,
         )
 
