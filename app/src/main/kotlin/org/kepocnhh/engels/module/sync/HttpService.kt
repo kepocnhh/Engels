@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -48,6 +49,43 @@ abstract class HttpService(
 
     protected abstract fun onSocketAccept(request: HttpRequest): HttpResponse
 
+    private fun ByteArray.toPrintAsJson(): String? {
+        val jsonObject = try {
+            JSONObject(String(this))
+        } catch (_: Throwable) {
+            return null
+        }
+        val json = jsonObject.toString(4)
+        if (json.isBlank()) return null
+        val maxLength = 256
+        if (json.length > maxLength) {
+            return "\n---\n${json.take(maxLength)}\n...\n---"
+        }
+        return "\n---\n$json\n---"
+    }
+
+    private fun log(request: HttpRequest) {
+        val headers = request.headers
+            .toList()
+            .joinToString(separator = "") { (k, v) -> "\n$k: $v" }
+        val body = request.body?.toPrintAsJson().orEmpty()
+        val message = """
+            ${request.method} ${request.query}
+        """.trimIndent() + headers + body
+        Log.d(TAG, message)
+    }
+
+    private fun log(response: HttpResponse) {
+        val headers = response.headers
+            .toList()
+            .joinToString(separator = "") { (k, v) -> "\n$k: $v" }
+        val body = response.body?.toPrintAsJson().orEmpty()
+        val message = """
+            ${response.code} ${response.message}
+        """.trimIndent() + headers + body
+        Log.d(TAG, message)
+    }
+
     private suspend fun onStarting(serverSocket: ServerSocket) {
         val address = try {
             getInetAddress().hostAddress ?: error("No address!")
@@ -65,8 +103,23 @@ abstract class HttpService(
             try {
                 serverSocket.accept().use { socket ->
                     val request = HttpRequest.read(socket.getInputStream())
-                    val response = onSocketAccept(request)
+                    log(request) // todo
+                    val response = try {
+                        onSocketAccept(request)
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "On socket accept error: $e")
+                        onInternalErrorIntercept(e) ?: HttpResponse(
+                            version = "1.1",
+                            code = 500,
+                            message = "Internal Server Error",
+                            headers = mapOf(
+                                "User-Agent" to HttpService::class.java.name,
+                            ),
+                            body = null,
+                        ) // todo
+                    }
                     HttpResponse.write(response, socket.getOutputStream())
+                    log(response)
                 }
             } catch (e: SocketException) {
                 if (environment.state.value is State.Stopping) break
@@ -76,6 +129,10 @@ abstract class HttpService(
             }
         }
         environment.state.value = State.Stopped
+    }
+
+    protected open fun onInternalErrorIntercept(error: Throwable): HttpResponse? {
+        return null
     }
 
     private fun onStarting() {

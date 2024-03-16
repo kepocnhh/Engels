@@ -9,32 +9,176 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
+import org.kepocnhh.engels.App
 import org.kepocnhh.engels.BuildConfig
+import org.kepocnhh.engels.entity.Meta
+import java.util.Date
+import java.util.UUID
 import kotlin.math.absoluteValue
+import kotlin.time.Duration.Companion.milliseconds
 
 internal class SyncService : HttpService(_environment) {
-    override fun onSocketAccept(request: HttpRequest): HttpResponse {
-        Log.d(TAG, "request:${request.method}:${request.query}\n\t---\n${request.headers.toList().joinToString(separator = "\n")}\n\t---")
-        if (request.body != null) {
-            Log.d(TAG, "request:body:${request.body.size}\n\t---\n${String(request.body)}\n\t---")
-        }
-//        val responseBody: ByteArray? = null
-        val responseBody: ByteArray? = """
-            {"time": ${System.currentTimeMillis()}}
-        """.trimIndent().toByteArray()
+    private fun JSONObject.toMeta(): Meta {
+        return Meta(
+            id = UUID.fromString(getString("id")),
+            created = getLong("created").milliseconds,
+            updated = getLong("updated").milliseconds,
+            hash = getString("hash"),
+        )
+    }
+
+    private fun noBodyResponse(
+        code: Int,
+        message: String,
+    ): HttpResponse {
         return HttpResponse(
             version = "1.1",
-            code = 200,
-            message = "Success",
+            code = code,
+            message = message,
             headers = mapOf(
-                "User-Agent" to "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}",
-            ) + responseBody?.getContentHeaders("application/json").orEmpty(),
-            body = responseBody,
+                "User-Agent" to _userAgent,
+            ),
+            body = null,
+        )
+    }
+
+    private fun jsonResponse(
+        code: Int,
+        message: String,
+        jsonObject: JSONObject,
+    ): HttpResponse {
+        val bytes = jsonObject
+            .toString()
+            .toByteArray()
+        return HttpResponse(
+            version = "1.1",
+            code = code,
+            message = message,
+            headers = mapOf(
+                "User-Agent" to _userAgent,
+                "Content-Type" to "application/json",
+                "Content-Length" to bytes.size.toString(),
+            ),
+            body = bytes,
+        )
+    }
+
+    override fun onSocketAccept(request: HttpRequest): HttpResponse {
+        when (request.query) {
+            "/sync" -> {
+                when (request.method) {
+                    "POST" -> {
+                        if (request.body == null) {
+                            return jsonResponse(
+                                code = 400,
+                                message = "Bad Request",
+                                jsonObject = JSONObject()
+                                    .put("message", "No body!"),
+                            )
+                        }
+                        if (request.body.isEmpty()) {
+                            return jsonResponse(
+                                code = 400,
+                                message = "Bad Request",
+                                jsonObject = JSONObject()
+                                    .put("message", "Body is empty!"),
+                            )
+                        }
+                        val clientMetaJson = try {
+                            JSONObject(String(request.body))
+                        } catch (e: Throwable) {
+                            return jsonResponse(
+                                code = 400,
+                                message = "Bad Request",
+                                jsonObject = JSONObject()
+                                    .put("message", "Wrong json!"),
+                            )
+                        }
+                        val clientMeta = try {
+                            clientMetaJson.toMeta()
+                        } catch (e: Throwable) {
+                            return jsonResponse(
+                                code = 400,
+                                message = "Bad Request",
+                                jsonObject = JSONObject()
+                                    .put("message", "Wrong body!"),
+                            )
+                        }
+                        val serverMeta = App.ldp.metas.firstOrNull {
+                            it.id == clientMeta.id
+                        }
+                        if (serverMeta == null) {
+                            App.ldp.metas += clientMeta
+                            return jsonResponse(
+                                code = 200,
+                                message = "Success",
+                                jsonObject = JSONObject()
+                                    .put("Status", "Created"),
+                            )
+                        }
+                        if (clientMeta.created != serverMeta.created) {
+                            TODO("Server created: ${Date(serverMeta.created.inWholeMilliseconds)}, but client created: ${Date(clientMeta.created.inWholeMilliseconds)}!")
+                        }
+                        if (clientMeta.hash == serverMeta.hash) {
+                            if (clientMeta.updated != serverMeta.updated) {
+                                TODO("Server updated: ${Date(serverMeta.updated.inWholeMilliseconds)}, but client updated: ${Date(clientMeta.updated.inWholeMilliseconds)}!")
+                            }
+                            return jsonResponse(
+                                code = 200,
+                                message = "Success",
+                                jsonObject = JSONObject()
+                                    .put("Status", "Updated"),
+                            )
+                        } else {
+                            when {
+                                clientMeta.updated == serverMeta.updated -> {
+                                    TODO()
+                                }
+                                clientMeta.updated < serverMeta.updated -> {
+                                    TODO()
+                                }
+                                clientMeta.updated > serverMeta.updated -> {
+                                    return jsonResponse(
+                                        code = 200,
+                                        message = "Success",
+                                        jsonObject = JSONObject()
+                                            .put("Status", "UpdateRequired"),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    else -> {
+                        return noBodyResponse(
+                            code = 405,
+                            message = "Method Not Allowed",
+                        )
+                    }
+                }
+            }
+        }
+        return noBodyResponse(
+            code = 404,
+            message = "No Found",
+        )
+    }
+
+    override fun onInternalErrorIntercept(error: Throwable): HttpResponse? {
+        return HttpResponse(
+            version = "1.1",
+            code = 500,
+            message = "Internal Server Error",
+            headers = mapOf(
+                "User-Agent" to _userAgent,
+            ),
+            body = null,
         )
     }
 
     companion object {
         private const val TAG = "[Sync]"
+        private const val _userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}"
         private val _channel = NotificationChannel(
             "${SyncService::class.java.name}:CHANNEL",
             "Sync service",

@@ -37,6 +37,7 @@ class HttpRequest(
             }
             val body = headers["Content-Length"]
                 ?.toIntOrNull()
+                ?.takeIf { it > 0 }
                 ?.let {
                     ByteArray(it) {
                         reader.read().toByte()

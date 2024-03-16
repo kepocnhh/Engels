@@ -14,8 +14,10 @@ import androidx.lifecycle.coroutineScope
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import org.kepocnhh.engels.entity.Meta
 import org.kepocnhh.engels.module.sync.HttpService
 import org.kepocnhh.engels.module.sync.SyncService
+import org.kepocnhh.engels.provider.LocalDataProvider
 import org.kepocnhh.engels.util.compose.LocalOnBackPressedDispatcher
 import org.kepocnhh.engels.util.compose.toPaddings
 
@@ -70,8 +72,13 @@ internal class App : Application() {
         }
     }
 
+    private class MockLocalDataProvider : LocalDataProvider {
+        override var metas: List<Meta> = emptyList()
+    }
+
     override fun onCreate() {
         super.onCreate()
+        _ldp = MockLocalDataProvider()
         val lifecycle = ProcessLifecycleOwner.get().lifecycle
         SyncService.state
             .flowWithLifecycle(lifecycle, minActiveState = Lifecycle.State.CREATED)
@@ -82,5 +89,10 @@ internal class App : Application() {
             .onEach(::onBroadcast)
             .launchIn(lifecycle.coroutineScope)
         // todo
+    }
+
+    companion object {
+        private var _ldp: LocalDataProvider? = null
+        val ldp: LocalDataProvider get() = checkNotNull(_ldp)
     }
 }
