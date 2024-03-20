@@ -14,12 +14,15 @@ import androidx.lifecycle.coroutineScope
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import org.kepocnhh.engels.entity.ItemsUploadRequest
 import org.kepocnhh.engels.entity.Meta
+import org.kepocnhh.engels.entity.Session
 import org.kepocnhh.engels.module.sync.SyncService
 import org.kepocnhh.engels.provider.LocalDataProvider
 import org.kepocnhh.engels.util.compose.LocalOnBackPressedDispatcher
 import org.kepocnhh.engels.util.compose.toPaddings
 import org.kepocnhh.engels.util.http.HttpService
+import java.util.UUID
 
 internal class App : Application() {
     object Theme {
@@ -74,11 +77,13 @@ internal class App : Application() {
 
     private class MockLocalDataProvider : LocalDataProvider {
         override var metas: List<Meta> = emptyList()
+        override var items: Map<UUID, ByteArray> = emptyMap()
+        override var requests: List<ItemsUploadRequest> = emptyList()
     }
 
     override fun onCreate() {
         super.onCreate()
-        _ldp = MockLocalDataProvider()
+        _locals = MockLocalDataProvider()
         val lifecycle = ProcessLifecycleOwner.get().lifecycle
         SyncService.state
             .flowWithLifecycle(lifecycle, minActiveState = Lifecycle.State.CREATED)
@@ -92,7 +97,7 @@ internal class App : Application() {
     }
 
     companion object {
-        private var _ldp: LocalDataProvider? = null
-        val ldp: LocalDataProvider get() = checkNotNull(_ldp)
+        private var _locals: LocalDataProvider? = null
+        val locals: LocalDataProvider get() = checkNotNull(_locals)
     }
 }

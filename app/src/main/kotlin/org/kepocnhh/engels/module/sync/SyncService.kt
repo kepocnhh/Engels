@@ -13,97 +13,38 @@ import org.json.JSONObject
 import org.kepocnhh.engels.App
 import org.kepocnhh.engels.BuildConfig
 import org.kepocnhh.engels.entity.Meta
+import org.kepocnhh.engels.entity.Session
 import org.kepocnhh.engels.util.http.HttpEnvironment
+import org.kepocnhh.engels.util.http.HttpHandler
 import org.kepocnhh.engels.util.http.HttpRequest
 import org.kepocnhh.engels.util.http.HttpResponse
 import org.kepocnhh.engels.util.http.HttpService
 import java.util.Date
 import java.util.UUID
 import kotlin.math.absoluteValue
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
 
 internal class SyncService : HttpService(_environment) {
-    private fun JSONObject.toMeta(): Meta {
-        return Meta(
-            id = UUID.fromString(getString("id")),
-            created = getLong("created").milliseconds,
-            updated = getLong("updated").milliseconds,
-            hash = getString("hash"),
-        )
+    private val handler: HttpHandler = SyncHttpHandler()
+
+    private fun <T : Any> MutableList<T>.withoutFirst(predicate: (T) -> Boolean): MutableList<T> {
+        for (i in indices) {
+            val it = this[i]
+            if (predicate(it)) {
+                removeAt(i)
+                return this
+            }
+        }
+        return this
     }
 
     override fun onSocketAccept(request: HttpRequest): HttpResponse {
-        when (request.query) {
-            "/sync" -> {
-                when (request.method) {
-                    "POST" -> {
-                        val result = request.parseBodyJson {
-                            it.toMeta()
-                        }
-                        val clientMeta = when (result) {
-                            is ParseBodyResult.Failure -> return result.toResponse()
-                            is ParseBodyResult.Success -> result.value
-                        }
-                        val serverMeta = App.ldp.metas.firstOrNull {
-                            it.id == clientMeta.id
-                        }
-                        if (serverMeta == null) {
-                            App.ldp.metas += clientMeta
-                            return jsonResponse(
-                                code = 200,
-                                message = "Success",
-                                json = JSONObject()
-                                    .put("Status", "Created")
-                                    .toString(),
-                            )
-                        }
-                        if (clientMeta.created != serverMeta.created) {
-                            TODO("Server created: ${Date(serverMeta.created.inWholeMilliseconds)}, but client created: ${Date(clientMeta.created.inWholeMilliseconds)}!")
-                        }
-                        if (clientMeta.hash == serverMeta.hash) {
-                            if (clientMeta.updated != serverMeta.updated) {
-                                TODO("Server updated: ${Date(serverMeta.updated.inWholeMilliseconds)}, but client updated: ${Date(clientMeta.updated.inWholeMilliseconds)}!")
-                            }
-                            return jsonResponse(
-                                code = 200,
-                                message = "Success",
-                                json = JSONObject()
-                                    .put("Status", "Updated")
-                                    .toString(),
-                            )
-                        } else {
-                            when {
-                                clientMeta.updated == serverMeta.updated -> {
-                                    TODO()
-                                }
-                                clientMeta.updated < serverMeta.updated -> {
-                                    TODO()
-                                }
-                                clientMeta.updated > serverMeta.updated -> {
-                                    return jsonResponse(
-                                        code = 200,
-                                        message = "Success",
-                                        json = JSONObject()
-                                            .put("Status", "UpdateRequired")
-                                            .toString(),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    else -> {
-                        return noBodyResponse(
-                            code = 405,
-                            message = "Method Not Allowed",
-                        )
-                    }
-                }
-            }
-        }
-        return noBodyResponse(
-            code = 404,
-            message = "No Found",
-        )
+        return handler.onSocketAccept(request)
+    }
+
+    override fun onInternalErrorIntercept(error: Throwable): HttpResponse? {
+        return handler.onInternalErrorIntercept(error)
     }
 
     companion object {
@@ -114,10 +55,7 @@ internal class SyncService : HttpService(_environment) {
             NotificationManager.IMPORTANCE_HIGH,
         )
         private val NOTIFICATION_ID = System.currentTimeMillis().toInt().absoluteValue
-        private val _environment = HttpEnvironment(
-            userAgent = "${BuildConfig.APPLICATION_ID}/${BuildConfig.VERSION_NAME}-${BuildConfig.VERSION_CODE}",
-            initialState = State.Stopped,
-        )
+        private val _environment = HttpEnvironment(State.Stopped)
 
         val broadcast = _environment.broadcast.asSharedFlow()
         val state = _environment.state.asStateFlow()
