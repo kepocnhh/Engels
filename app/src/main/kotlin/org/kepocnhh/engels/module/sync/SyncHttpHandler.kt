@@ -45,6 +45,24 @@ internal class SyncHttpHandler : HttpHandler {
         return this
     }
 
+    private fun addItemsUploadRequest(meta: Meta): HttpResponse {
+        if (App.locals.requests.any { it.meta.id == meta.id }) TODO()
+        val now = System.currentTimeMillis().milliseconds
+        val session = Session(
+            id = UUID.randomUUID(),
+            expires = now + 1.hours,
+        )
+        App.locals.requests += ItemsUploadRequest(
+            meta = meta,
+            session = session,
+        )
+        return httpResponse(
+            code = 201,
+            message = "Created",
+            headers = mapOf("Session-Id" to session.id.toString()),
+        )
+    }
+
     private fun onPostMetaSync(request: HttpRequest): HttpResponse {
         val result = request.parseBodyJson {
             it.toMeta()
@@ -54,26 +72,26 @@ internal class SyncHttpHandler : HttpHandler {
             is ParseBodyResult.Success -> result.value
         }
         val serverMeta = App.locals.metas.firstOrNull { it.id == clientMeta.id }
-        if (serverMeta == null) {
-            val now = System.currentTimeMillis().milliseconds
-            val session = Session(
-                id = UUID.randomUUID(),
-                expires = now + 1.hours,
-            )
-            App.locals.requests += ItemsUploadRequest(
-                meta = clientMeta,
-                session = session,
-            )
+            ?: return addItemsUploadRequest(meta = clientMeta)
+        check(serverMeta.created == clientMeta.created)
+        if (serverMeta.hash == clientMeta.hash) {
+            check(serverMeta.updated == clientMeta.updated)
             return httpResponse(
-                code = 201,
-                message = "Created",
-                headers = mapOf("Session-Id" to session.id.toString()),
+                code = 204,
+                message = "No Content",
             )
         }
-        return httpResponse(
-            code = 501,
-            message = "Not Implemented",
-        )
+        if (serverMeta.updated == clientMeta.updated) TODO()
+        if (serverMeta.updated > clientMeta.updated) {
+            val body = App.locals.items[serverMeta.id] ?: TODO()
+            return httpResponse(
+                code = 200,
+                message = "OK",
+                headers = mapOf("Meta-Updated" to serverMeta.updated.inWholeMilliseconds.toString()),
+                body = body,
+            )
+        }
+        return addItemsUploadRequest(meta = clientMeta)
     }
 
     private fun onPostItems(request: HttpRequest): HttpResponse {
@@ -88,7 +106,10 @@ internal class SyncHttpHandler : HttpHandler {
         checkNotNull(body)
         check(body.isNotEmpty())
         App.locals.requests -= uploadRequest
-        App.locals.metas += uploadRequest.meta
+        App.locals.metas = App.locals.metas
+            .toMutableList()
+            .withoutFirst { it.id == uploadRequest.meta.id }
+            .with(uploadRequest.meta)
         App.locals.items += uploadRequest.meta.id to body
         return httpResponse(
             code = 200,
