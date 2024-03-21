@@ -11,6 +11,7 @@ import org.kepocnhh.engels.util.http.HttpRequest
 import org.kepocnhh.engels.util.http.HttpResponse
 import org.kepocnhh.engels.util.http.ParseBodyResult
 import org.kepocnhh.engels.util.http.parseBody
+import java.util.Date
 import java.util.UUID
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -46,7 +47,12 @@ internal class SyncHttpHandler : HttpHandler {
     }
 
     private fun addItemsUploadRequest(meta: Meta): HttpResponse {
-        if (App.locals.requests.any { it.meta.id == meta.id }) TODO()
+        if (App.locals.requests.any { it.meta.id == meta.id }) {
+            return httpResponse(
+                code = 403,
+                message = "Forbidden",
+            )
+        }
         val now = System.currentTimeMillis().milliseconds
         val session = Session(
             id = UUID.randomUUID(),
@@ -63,7 +69,7 @@ internal class SyncHttpHandler : HttpHandler {
         )
     }
 
-    private fun onPostMetaSync(request: HttpRequest): HttpResponse {
+    private fun onPostItemsSync(request: HttpRequest): HttpResponse {
         val result = request.parseBodyJson {
             it.toMeta()
         }
@@ -73,15 +79,39 @@ internal class SyncHttpHandler : HttpHandler {
         }
         val serverMeta = App.locals.metas.firstOrNull { it.id == clientMeta.id }
             ?: return addItemsUploadRequest(meta = clientMeta)
-        check(serverMeta.created == clientMeta.created)
+        if (serverMeta.created != clientMeta.created) {
+            return jsonResponse(
+                code = 400,
+                message = "Bad Request",
+                json = JSONObject()
+                    .put("message", "The creation time does not match!")
+                    .toString(),
+            )
+        }
         if (serverMeta.hash == clientMeta.hash) {
-            check(serverMeta.updated == clientMeta.updated)
+            if (serverMeta.updated != clientMeta.updated) {
+                return jsonResponse(
+                    code = 400,
+                    message = "Bad Request",
+                    json = JSONObject()
+                        .put("message", "The update time does not match!")
+                        .toString(),
+                )
+            }
             return httpResponse(
                 code = 204,
                 message = "No Content",
             )
         }
-        if (serverMeta.updated == clientMeta.updated) TODO()
+        if (serverMeta.updated == clientMeta.updated) {
+            return jsonResponse(
+                code = 400,
+                message = "Bad Request",
+                json = JSONObject()
+                    .put("message", "The update time is the same!")
+                    .toString(),
+            )
+        }
         if (serverMeta.updated > clientMeta.updated) {
             val body = App.locals.items[serverMeta.id] ?: TODO()
             return httpResponse(
@@ -118,8 +148,8 @@ internal class SyncHttpHandler : HttpHandler {
     }
 
     private val routing = mapOf(
-        "/v1/meta/sync" to mapOf(
-            "POST" to ::onPostMetaSync,
+        "/v1/items/sync" to mapOf(
+            "POST" to ::onPostItemsSync,
         ),
         "/v1/items" to mapOf(
             "POST" to ::onPostItems,
