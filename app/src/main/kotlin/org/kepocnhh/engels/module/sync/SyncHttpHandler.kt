@@ -11,7 +11,6 @@ import org.kepocnhh.engels.util.http.HttpRequest
 import org.kepocnhh.engels.util.http.HttpResponse
 import org.kepocnhh.engels.util.http.ParseBodyResult
 import org.kepocnhh.engels.util.http.parseBody
-import java.util.Date
 import java.util.UUID
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
@@ -28,6 +27,14 @@ internal class SyncHttpHandler : HttpHandler {
             updated = getLong("updated").milliseconds,
             hash = getString("hash"),
         )
+    }
+
+    private fun Meta.toJSONObject(): JSONObject {
+        return JSONObject()
+            .put("id", id.toString())
+            .put("created", created.inWholeMilliseconds)
+            .put("updated", updated.inWholeMilliseconds)
+            .put("hash", hash)
     }
 
     private fun <T : Any> MutableList<T>.with(item: T): MutableList<T> {
@@ -47,12 +54,11 @@ internal class SyncHttpHandler : HttpHandler {
     }
 
     private fun addItemsUploadRequest(meta: Meta): HttpResponse {
-        if (App.locals.requests.any { it.meta.id == meta.id }) {
-            return httpResponse(
-                code = 403,
-                message = "Forbidden",
-            )
-        }
+        val exists = App.locals.requests.any { it.meta.id == meta.id }
+        if (exists) return httpResponse(
+            code = 403,
+            message = "Forbidden",
+        )
         val now = System.currentTimeMillis().milliseconds
         val session = Session(
             id = UUID.randomUUID(),
@@ -70,10 +76,7 @@ internal class SyncHttpHandler : HttpHandler {
     }
 
     private fun onPostItemsSync(request: HttpRequest): HttpResponse {
-        val result = request.parseBodyJson {
-            it.toMeta()
-        }
-        val clientMeta = when (result) {
+        val clientMeta = when (val result = request.parseBodyJson { it.toMeta() }) {
             is ParseBodyResult.Failure -> return result.toResponse()
             is ParseBodyResult.Success -> result.value
         }
@@ -81,8 +84,8 @@ internal class SyncHttpHandler : HttpHandler {
             ?: return addItemsUploadRequest(meta = clientMeta)
         if (serverMeta.created != clientMeta.created) {
             return jsonResponse(
-                code = 400,
-                message = "Bad Request",
+                code = 409,
+                message = "Conflict",
                 json = JSONObject()
                     .put("message", "The creation time does not match!")
                     .toString(),
@@ -91,22 +94,22 @@ internal class SyncHttpHandler : HttpHandler {
         if (serverMeta.hash == clientMeta.hash) {
             if (serverMeta.updated != clientMeta.updated) {
                 return jsonResponse(
-                    code = 400,
-                    message = "Bad Request",
+                    code = 409,
+                    message = "Conflict",
                     json = JSONObject()
                         .put("message", "The update time does not match!")
                         .toString(),
                 )
             }
             return httpResponse(
-                code = 204,
-                message = "No Content",
+                code = 304,
+                message = "Not Modified",
             )
         }
         if (serverMeta.updated == clientMeta.updated) {
             return jsonResponse(
-                code = 400,
-                message = "Bad Request",
+                code = 409,
+                message = "Conflict",
                 json = JSONObject()
                     .put("message", "The update time is the same!")
                     .toString(),
@@ -147,12 +150,55 @@ internal class SyncHttpHandler : HttpHandler {
         )
     }
 
+    private fun onGetItems(request: HttpRequest): HttpResponse {
+        // todo get UUID
+        val metaIdValue = request.headers["Meta-Id"]
+        if (metaIdValue.isNullOrBlank()) {
+            return jsonResponse(
+                code = 400,
+                message = "Bad Request",
+                json = JSONObject()
+                    .put("message", "No meta ID!")
+                    .toString(),
+            )
+        }
+        val metaId = try {
+            UUID.fromString(metaIdValue)
+        } catch (_: Throwable) {
+            return jsonResponse(
+                code = 400,
+                message = "Bad Request",
+                json = JSONObject()
+                    .put("message", "Wrong meta ID!")
+                    .toString(),
+            )
+        }
+        val meta = App.locals.metas.firstOrNull { it.id == metaId }
+        if (meta == null) {
+            return httpResponse(
+                code = 404,
+                message = "Not Found",
+            )
+        }
+        val body = App.locals.items[meta.id] ?: TODO()
+        return httpResponse(
+            code = 200,
+            message = "OK",
+            headers = mapOf(
+                "Meta-Created" to meta.created.inWholeMilliseconds.toString(),
+                "Meta-Updated" to meta.updated.inWholeMilliseconds.toString(),
+            ),
+            body = body,
+        )
+    }
+
     private val routing = mapOf(
         "/v1/items/sync" to mapOf(
             "POST" to ::onPostItemsSync,
         ),
         "/v1/items" to mapOf(
             "POST" to ::onPostItems,
+            "GET" to ::onGetItems,
         ),
     )
 
