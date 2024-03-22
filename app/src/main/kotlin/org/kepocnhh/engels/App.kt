@@ -14,7 +14,7 @@ import androidx.lifecycle.coroutineScope
 import androidx.lifecycle.flowWithLifecycle
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import org.kepocnhh.engels.entity.ItemsRequest
+import org.kepocnhh.engels.entity.ItemsUploadRequest
 import org.kepocnhh.engels.entity.Meta
 import org.kepocnhh.engels.module.sync.SyncService
 import org.kepocnhh.engels.provider.LocalDataProvider
@@ -77,7 +77,7 @@ internal class App : Application() {
     private class MockLocalDataProvider : LocalDataProvider {
         override var metas: List<Meta> = emptyList()
         override var items: Map<UUID, ByteArray> = emptyMap()
-        override var requests: List<ItemsRequest> = emptyList()
+        override var requests: List<ItemsUploadRequest> = emptyList()
     }
 
     override fun onCreate() {
