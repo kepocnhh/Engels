@@ -70,6 +70,19 @@ internal fun RouterScreen() {
                             .fillMaxWidth()
                             .height(64.dp)
                             .clickable {
+                                Log.d(TAG, "clear...")
+                                App.locals.metas = emptyList()
+                                App.locals.items = emptyMap()
+                                App.locals.requests = emptyList()
+                            }
+                            .wrapContentSize(),
+                        text = "clear",
+                    )
+                    BasicText(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(64.dp)
+                            .clickable {
                                 Log.d(TAG, "start server...")
                                 HttpService.startService<SyncService>(context, HttpService.Action.StartServer)
                             }
